@@ -4,6 +4,7 @@ import { translate } from 'bing-translate-api'
 import { Result, validationResult } from 'express-validator'
 import { Translation, TranslationAttributes } from '../Translation/Translation.model'
 import { DatabaseError } from 'sequelize'
+import { splitLongString } from '../Helpers/splitLongString'
 
 export async function translatePrincipioActivo(req: Request, res: Response) {
   const result: Result = validationResult(req)
@@ -69,33 +70,33 @@ export async function translatePrincipioActivo(req: Request, res: Response) {
   //   attributes.push('pharmacology')
   // }
 
-  // if (mechanismOfAction) {
-  //   attributes.push('mechanismOfAction')
-  // }
+  if (mechanismOfAction) {
+    attributes.push('mechanismOfAction')
+  }
 
   // if (toxicity) {
   //   attributes.push('toxicity')
   // }
 
-  // if (biotransformation) {
-  //   attributes.push('biotransformation')
-  // }
+  if (biotransformation) {
+    attributes.push('biotransformation')
+  }
 
   // if (absorption) {
   //   attributes.push('absorption')
   // }
 
-  // if (halfLife) {
-  //   attributes.push('halfLife')
-  // }
+  if (halfLife) {
+    attributes.push('halfLife')
+  }
 
   // if (proteinBinding) {
   //   attributes.push('proteinBinding')
   // }
 
-  // if (routeOfElimination) {
-  //   attributes.push('routeOfElimination')
-  // }
+  if (routeOfElimination) {
+    attributes.push('routeOfElimination')
+  }
 
   // if (volumeOfDistribution) {
   //   attributes.push('volumeOfDistribution')
@@ -125,7 +126,7 @@ export async function translatePrincipioActivo(req: Request, res: Response) {
       } else {
         return res.status(400).send({ message: 'No attributes provided' })
       }
-
+      console.log('Partición: ', offset)
       //aca comienza lo jodido, traducir los atributos, por separado
 
       //Este es un for que recorre los atributos del array de atributos
@@ -143,8 +144,20 @@ export async function translatePrincipioActivo(req: Request, res: Response) {
             //aca se recorre el array de valores del atributo y se traducen
             attributeValues.map(async (value) => {
               try {
-                const result = await translate(value, 'en', 'es')
-                return result?.translation
+                //console.log('Tamaño: ', value.length)
+                if (value.length > 1000) {
+                  const splitValues = splitLongString(value, 1000)
+                  const translatedParts = await Promise.all(
+                    splitValues.map(async (part) => {
+                      const result = await translate(part, 'en', 'es')
+                      return result?.translation
+                    })
+                  )
+                  return translatedParts.join(' ')
+                } else {
+                  const result = await translate(value, 'en', 'es')
+                  return result?.translation
+                }
               } catch (error) {
                 console.log(error)
                 throw new Error('Error translating attribute values')
@@ -155,19 +168,34 @@ export async function translatePrincipioActivo(req: Request, res: Response) {
           //aca se setean los valores traducidos a un arreglo de traducciones de principios activos
           //TODO: esto esta bien pero si se necesitan varias traducciones se deberá acomodar para que no cree traducciones duplicadas
 
-          translatedAttributeValues.forEach((translatedValue, index) => {
-            const translation: any = {
-              PrincipioActivoId: PrincipioActivos[index].id,
-              language: 'es',
-              observations: 'Translated from Bing API',
-            }
-            translation[atribute as keyof TranslationAttributes] = translatedValue || ''
+          translatedAttributeValues.forEach(async (translatedValue, index) => {
+            //reviso que no este duplicado
+            const duplicatedTranslation = await Translation.findOne({
+              where: {
+                PrincipioActivoId: PrincipioActivos[index].id,
+                language: 'es',
+                observations: 'Translated from Bing API',
+              },
+            })
 
-            Translations.push(translation as TranslationAttributes)
+            if (duplicatedTranslation) {
+              //si esta duplicado lo actualizo
+              await duplicatedTranslation.update({ [atribute as keyof TranslationAttributes]: translatedValue || '' })
+            } else {
+              //si no esta duplicado lo creo
+              const translation: any = {
+                PrincipioActivoId: PrincipioActivos[index].id,
+                language: 'es',
+                observations: 'Translated from Bing API',
+              }
+              translation[atribute as keyof TranslationAttributes] = translatedValue || ''
+              await Translation.create(translation)
+            }
+            //Translations.push(translation as TranslationAttributes)
           })
 
           //aca se guardan las traducciones en la base de datos
-          await Translation.bulkCreate(Translations, { validate: true })
+          //await Translation.bulkCreate(Translations, { validate: true })
         }
       }
       offset += limit

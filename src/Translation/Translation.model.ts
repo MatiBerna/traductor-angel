@@ -7,6 +7,10 @@ export interface TranslationAttributes {
   language?: string
   indication?: string
   observations?: string
+  mechanismOfAction?: string
+  biotransformation?: string
+  halfLife?: string
+  routeOfElimination?: string
 }
 
 export class Translation extends Model<TranslationAttributes> {
@@ -15,6 +19,10 @@ export class Translation extends Model<TranslationAttributes> {
   public language!: string
   public indication!: string
   public observations!: string
+  public mechanismOfAction!: string
+  public biotransformation!: string
+  public halfLife!: string
+  public routeOfElimination!: string
 }
 
 Translation.init(
@@ -37,6 +45,22 @@ Translation.init(
       allowNull: true,
     },
     observations: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    mechanismOfAction: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    biotransformation: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    halfLife: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    routeOfElimination: {
       type: DataTypes.STRING,
       allowNull: true,
     },
